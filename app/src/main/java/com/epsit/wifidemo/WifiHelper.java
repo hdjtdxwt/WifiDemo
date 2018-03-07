@@ -34,7 +34,7 @@ public class WifiHelper {
     private static final int WIFICIPHER_WEP = 1;
     private static final int WIFICIPHER_WPA = 2;
 
-    private WifiConfiguration createWifiConfig(String ssid, String password, int type) {
+    public WifiConfiguration createWifiConfig(String ssid, String password, int type) {
         WifiConfiguration config = new WifiConfiguration();
         config.allowedAuthAlgorithms.clear();
         config.allowedGroupCiphers.clear();
@@ -72,7 +72,7 @@ public class WifiHelper {
         return config;
     }
 
-    private WifiConfiguration isExist(String ssid) {
+    public WifiConfiguration isExist(String ssid) {
         List<WifiConfiguration> configs = mWifiManager.getConfiguredNetworks();
 
         for (WifiConfiguration config : configs) {
