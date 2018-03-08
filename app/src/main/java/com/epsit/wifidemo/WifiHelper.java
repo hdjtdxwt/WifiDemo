@@ -2,8 +2,11 @@ package com.epsit.wifidemo;
 
 import android.content.Context;
 import android.net.wifi.WifiConfiguration;
+import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
+import android.util.Log;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -71,15 +74,40 @@ public class WifiHelper {
 
         return config;
     }
-
+    public String getConnectWifiSsid(){
+        WifiInfo wifiInfo = mWifiManager.getConnectionInfo();
+        Log.e("wifiInfo", wifiInfo.toString());
+        Log.e("SSID",wifiInfo.getSSID());
+        return wifiInfo.getSSID();
+    }
+    public WifiInfo getConnectWifiInifo(){
+        WifiInfo wifiInfo = mWifiManager.getConnectionInfo();
+        Log.e("wifiInfo", wifiInfo.toString());
+        Log.e("SSID",wifiInfo.getSSID());
+        return wifiInfo ;
+    }
     public WifiConfiguration isExist(String ssid) {
         List<WifiConfiguration> configs = mWifiManager.getConfiguredNetworks();
-
-        for (WifiConfiguration config : configs) {
-            if (config.SSID.equals("\"" + ssid + "\"")) {
-                return config;
+        if(configs!=null){
+            for (WifiConfiguration config : configs) {
+                if (config.SSID.equals("\"" + ssid + "\"")) {
+                    return config;
+                }
             }
         }
         return null;
+    }
+    private List<String> getNetworkId(){
+        List<String>ssidList = new ArrayList<>();
+        List<WifiConfiguration> wifiConfigurationList = mWifiManager.getConfiguredNetworks();
+        if(wifiConfigurationList != null && wifiConfigurationList.size() != 0){
+            for (int i = 0; i < wifiConfigurationList.size(); i++) {
+                WifiConfiguration wifiConfiguration = wifiConfigurationList.get(i);
+                if (wifiConfiguration.SSID != null ) {
+                    ssidList.add(wifiConfiguration.SSID);
+                }
+            }
+        }
+        return ssidList;
     }
 }

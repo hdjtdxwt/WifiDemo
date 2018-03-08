@@ -1,6 +1,7 @@
 package com.epsit.wifidemo;
 
 import android.Manifest;
+import android.app.Dialog;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -22,33 +23,51 @@ import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.text.TextUtils;
 import android.util.Log;
+import android.view.Display;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowManager;
 import android.widget.Button;
+import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.TreeMap;
 
 import android.support.v7.app.AppCompatActivity;
 
+import com.epsit.wifidemo.dialog.InputAndConnectDialog;
+import com.epsit.wifidemo.dialog.SelectItemDialog;
+
 /**
  * Created by Administrator on 2018/2/27/027.
  */
 
-public class WifiActivity extends AppCompatActivity {
+public class WifiActivity extends AppCompatActivity implements WifiReceiverActionListener, OnItemClickListener, InputAndConnectDialog.OnConnectionListener, OnItemLongClickListener, SelectItemDialog.OnSelectDialogListener {
     private WifiManager mWifiManager;
     private Handler mMainHandler;
     private boolean mHasPermission;
-    String TAG ="WifiActivity";
+    String TAG = "WifiActivity";
+    TextView mOpenWifiButton;
+    Button mGetWifiInfoButton;
+    WifiReceiver wifiReceiver;
+    ListView listView;
+    ResultListAdapter adapter;
+    String connectSsid;
+    List<ScanResult> list = new ArrayList<>();
+    private static final int WIFICIPHER_NOPASS = 0;
+    private static final int WIFICIPHER_WEP = 1;
+    private static final int WIFICIPHER_WPA = 2;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_wifi);
-
-        //registerBroadcastReceiver();
 
         mWifiManager = (WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
         mMainHandler = new Handler();
@@ -61,17 +80,9 @@ public class WifiActivity extends AppCompatActivity {
         if (!mHasPermission) {
             requestPermission();
         }
+        registerBroadcastReceiver();
     }
 
-    Button mOpenWifiButton;
-    Button mGetWifiInfoButton;
-    RecyclerView mWifiInfoRecyclerView;
-
-    private void findChildViews() {
-        mOpenWifiButton = (Button) findViewById(R.id.open_wifi);
-        mGetWifiInfoButton = (Button) findViewById(R.id.get_wifi_info);
-        mWifiInfoRecyclerView = (RecyclerView) findViewById(R.id.wifi_info_detail);
-    }
 
     private Runnable mMainRunnable = new Runnable() {
         @Override
@@ -85,9 +96,13 @@ public class WifiActivity extends AppCompatActivity {
     };
 
     private List<ScanResult> mScanResultList;
-
+    private void findChildViews() {
+        mOpenWifiButton = (TextView) findViewById(R.id.open_wifi);
+        mGetWifiInfoButton = (Button) findViewById(R.id.get_wifi_info);
+        listView = (ListView) findViewById(R.id.wifi_info_detail);
+    }
     private void configChildViews() {
-        mOpenWifiButton.setOnClickListener(new View.OnClickListener() {
+        /*mOpenWifiButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 if (!mWifiManager.isWifiEnabled()) {
@@ -95,144 +110,141 @@ public class WifiActivity extends AppCompatActivity {
                     mMainHandler.post(mMainRunnable);
                 }
             }
-        });
+        });*/
 
         mGetWifiInfoButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                if (mWifiManager.isWifiEnabled()) {
-                    mScanResultList = mWifiManager.getScanResults();
-                    sortList(mScanResultList);
-                    mWifiInfoRecyclerView.getAdapter().notifyDataSetChanged();
+                Log.e(TAG," 点击后查询到的状态："+mWifiManager.getWifiState());
+                if(WifiManager.WIFI_STATE_ENABLED==mWifiManager.getWifiState()){ //wifi可用
+                    //v.setBackgroundResource(R.drawable.wifi_gray_icon);
+                    mWifiManager.setWifiEnabled(false);
+                    Log.e(TAG,"当前的是可用状态，立马点击让他不可用");
+                }else{
+                    //v.setBackgroundResource(R.drawable.wifi_blue_icon);
+                    mWifiManager.setWifiEnabled(true);
+                    Log.e(TAG,"当前的是不可用状态，立马点击让他可用");
                 }
+                //reflushList();
             }
         });
 
-        mWifiInfoRecyclerView.setLayoutManager(
-                new LinearLayoutManager(this, LinearLayoutManager.VERTICAL, false));
-        mWifiInfoRecyclerView.setAdapter(new ScanResultAdapter());
+        adapter = new ResultListAdapter(this, list);
+        adapter.setListener(this);
+        adapter.setLongClickListener(this);
+        String connectedName = WifiHelper.getInstance(this).getConnectWifiSsid();
+        adapter.setConnectedName(connectedName);
+        listView.setAdapter(adapter);
     }
-
-    private void sortList(List<ScanResult> list) {
-        TreeMap<String, ScanResult> map = new TreeMap<>();
-        for (ScanResult scanResult : list) {
-            map.put(scanResult.SSID, scanResult);
-        }
-        list.clear();
-        list.addAll(map.values());
-    }
-
-    private class ScanResultViewHolder extends RecyclerView.ViewHolder {
-        private View mView;
-        private TextView mWifiName;
-        private TextView mWifiLevel;
-
-        ScanResultViewHolder(View itemView) {
-            super(itemView);
-
-            mView = itemView;
-            mWifiName = (TextView) itemView.findViewById(R.id.ssid);
-            mWifiLevel = (TextView) itemView.findViewById(R.id.level);
-        }
-
-        void bindScanResult(final ScanResult scanResult) {
-            mWifiName.setText(
-                    getString(R.string.scan_wifi_name, "" + scanResult.SSID));
-            mWifiLevel.setText(
-                    getString(R.string.scan_wifi_level, "" + scanResult.level));
-
-            mView.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    int netId = mWifiManager.addNetwork(createWifiConfig(scanResult.SSID, "21123073", WIFICIPHER_WPA));
-                    boolean enable = mWifiManager.enableNetwork(netId, true);
-                    Log.d("ZJTest", "enable: " + enable);
-                    boolean reconnect = mWifiManager.reconnect();
-                    Log.d("ZJTest", "reconnect: " + reconnect);
+    public void reflushList(){
+        if (mWifiManager.isWifiEnabled()) {
+            mScanResultList = mWifiManager.getScanResults();//这里面的ScanResult的SSID不带有引号
+            for(ScanResult result :mScanResultList){
+                Log.e(TAG,result.SSID);
+            }
+            Log.e(TAG,"---刚进来：mScanResultList。size="+mScanResultList.size());
+            //下面的两个for去除重复的wifi（网络的说法是同一个wifi双频段就会出现这样的情况，比如有2.4G的网络还有5G的网络），
+            for(int i=0;i< mScanResultList.size();i++){
+                ScanResult current = mScanResultList.get(i);//
+                for(int j=i+1;j<mScanResultList.size();j++){
+                    if(current.SSID.equals(mScanResultList.get(j).SSID)){
+                        mScanResultList.remove(j);
+                    }
                 }
-            });
-        }
-    }
-
-    private static final int WIFICIPHER_NOPASS = 0;
-    private static final int WIFICIPHER_WEP = 1;
-    private static final int WIFICIPHER_WPA = 2;
-
-    private WifiConfiguration createWifiConfig(String ssid, String password, int type) {
-        WifiConfiguration config = new WifiConfiguration();
-        config.allowedAuthAlgorithms.clear();
-        config.allowedGroupCiphers.clear();
-        config.allowedKeyManagement.clear();
-        config.allowedPairwiseCiphers.clear();
-        config.allowedProtocols.clear();
-        config.SSID = "\"" + ssid + "\"";
-
-        WifiConfiguration tempConfig = isExist(ssid);
-        if (tempConfig != null) {
-            mWifiManager.removeNetwork(tempConfig.networkId);
-        }
-
-        if (type == WIFICIPHER_NOPASS) {
-            config.allowedKeyManagement.set(WifiConfiguration.KeyMgmt.NONE);
-        } else if (type == WIFICIPHER_WEP) {
-            config.hiddenSSID = true;
-            config.wepKeys[0] = "\"" + password + "\"";
-            config.allowedAuthAlgorithms.set(WifiConfiguration.AuthAlgorithm.OPEN);
-            config.allowedAuthAlgorithms.set(WifiConfiguration.AuthAlgorithm.SHARED);
-            config.allowedKeyManagement.set(WifiConfiguration.KeyMgmt.NONE);
-            config.wepTxKeyIndex = 0;
-        } else if (type == WIFICIPHER_WPA) {
-            config.preSharedKey = "\"" + password + "\"";
-            config.hiddenSSID = true;
-            config.allowedAuthAlgorithms.set(WifiConfiguration.AuthAlgorithm.OPEN);
-            config.allowedGroupCiphers.set(WifiConfiguration.GroupCipher.TKIP);
-            config.allowedKeyManagement.set(WifiConfiguration.KeyMgmt.WPA_PSK);
-            config.allowedPairwiseCiphers.set(WifiConfiguration.PairwiseCipher.TKIP);
-            config.allowedGroupCiphers.set(WifiConfiguration.GroupCipher.CCMP);
-            config.allowedPairwiseCiphers.set(WifiConfiguration.PairwiseCipher.CCMP);
-            config.status = WifiConfiguration.Status.ENABLED;
-        }
-
-        return config;
-    }
-
-    private WifiConfiguration isExist(String ssid) {
-        List<WifiConfiguration> configs = mWifiManager.getConfiguredNetworks();
-
-        for (WifiConfiguration config : configs) {
-            if (config.SSID.equals("\"" + ssid + "\"")) {
-                return config;
             }
+            Log.e(TAG,"移除重名的wifi后："+mScanResultList.size());
+            //到这里，mScanResultList中就没有重复的wifi了
+            list.clear();
+
+            //resultList里的第一个就是当前连接的wifi名称
+            List<ScanResult>resultList = new ArrayList();
+            String name = WifiHelper.getInstance(getApplicationContext()).getConnectWifiSsid();
+            Log.e(TAG,"当前连接的wifi:"+name);
+            if(!TextUtils.isEmpty(name)) {
+                for (int i = 0; i < mScanResultList.size(); i++) {
+                    if (name.equals("\""+mScanResultList.get(i).SSID+"\"")) {
+                        ScanResult result = mScanResultList.get(i);
+                        resultList.add(result);
+                        mScanResultList.remove(result);
+                        break;
+                    }
+                }
+            }
+            Log.e(TAG,"移除当前已经连接的那个wifi后：resultList.size="+resultList.size()+"  mScanResultList.size="+mScanResultList.size());
+            List<WifiConfiguration> configs = mWifiManager.getConfiguredNetworks();//里面的WifiConfiguration的SSID属性带有引号
+            if(configs!=null){
+                Log.e(TAG,"configs.size="+configs.size());
+                for (WifiConfiguration config : configs) {
+                    Log.e(TAG,"config.SSID="+config.SSID);
+                }
+                for(int i=0;i<mScanResultList.size();i++){
+                    ScanResult result = mScanResultList.get(i);
+                    for(int j=0;j<configs.size();j++){
+                        if(configs.get(j).SSID.equals("\""+result.SSID+"\"")){
+                            resultList.add(result);
+                            mScanResultList.remove(result);
+                            break;
+                        }
+                    }
+                }
+                Log.e(TAG,"添加完保存了的wifi后：resultList.size="+resultList.size()+"  mScanResultList.size="+mScanResultList.size());
+            }
+
+            resultList.addAll(mScanResultList);
+            list.addAll(resultList);
+            //sortList(list);
+            adapter.notifyDataSetChanged();
         }
-        return null;
     }
 
-    private class ScanResultAdapter extends RecyclerView.Adapter<ScanResultViewHolder> {
-        @Override
-        public ScanResultViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
-            View view = LayoutInflater.from(getApplicationContext())
-                    .inflate(R.layout.item_scan_result, parent, false);
-
-            return new ScanResultViewHolder(view);
-        }
-
-        @Override
-        public void onBindViewHolder(ScanResultViewHolder holder, int position) {
-            if (mScanResultList != null) {
-                holder.bindScanResult(mScanResultList.get(position));
-            }
-        }
-
-        @Override
-        public int getItemCount() {
-            if (mScanResultList == null) {
-                return 0;
-            } else {
-                return mScanResultList.size();
-            }
-        }
+    //-------------------回调start
+    @Override
+    public void onWifiConnected(WifiInfo wifiInfo) {
+        Log.e(TAG, "onWifiConnected-->" + wifiInfo.getSSID());
+        String name = mWifiManager.getConnectionInfo().getSSID();
+        Log.e(TAG, "name-->" + name);
+        adapter.setConnectedName(name);
+        reflushList();
+        adapter.notifyDataSetChanged();
     }
 
+    @Override
+    public void onWifiScanResultBack() {
+        Log.e(TAG, "onWifiScanResultBack-->有搜索结果返回");
+    }
+
+    @Override
+    public void onWifiOpened() {
+        Log.e(TAG, "onWifiOpened-->wifi打开了");
+        reflushList();
+        mGetWifiInfoButton.setBackgroundResource(R.drawable.wifi_blue_icon);
+    }
+
+    @Override
+    public void onWifiOpening() {
+        Log.e(TAG, "onWifiOpened-->wifi正在打开");
+    }
+
+    @Override
+    public void onWifiClosed() {
+        Log.e(TAG, "onWifiOpened-->wifi关闭的");
+        list.clear();
+        //reflushList();
+        adapter.notifyDataSetChanged();
+        mGetWifiInfoButton.setBackgroundResource(R.drawable.wifi_gray_icon);
+    }
+
+    @Override
+    public void onWifiClosing() {
+        Log.e(TAG, "onWifiOpened-->wifi正在关闭");
+    }
+    //-------------------回调end
+
+    /**
+     * public void onClick(View v) {
+     * <p>
+     * }
+     */
     private static final String[] NEEDED_PERMISSIONS = new String[]{
             Manifest.permission.ACCESS_COARSE_LOCATION,
             Manifest.permission.ACCESS_FINE_LOCATION
@@ -265,14 +277,12 @@ public class WifiActivity extends AppCompatActivity {
             mGetWifiInfoButton.setEnabled(false);
             if (mScanResultList != null) {
                 mScanResultList.clear();
-                mWifiInfoRecyclerView.getAdapter().notifyDataSetChanged();
             }
         }
     }
 
     @Override
-    public void onRequestPermissionsResult(int requestCode,
-                                           @NonNull String[] permissions, @NonNull int[] grantResults) {
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         boolean hasAllPermission = true;
 
         if (requestCode == PERMISSION_REQUEST_CODE) {
@@ -300,153 +310,121 @@ public class WifiActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        //unregisterBroadcastReceiver();
+        if (wifiReceiver != null) {
+            unregisterReceiver(wifiReceiver);
+            wifiReceiver = null;
+        }
     }
 
-    private BroadcastReceiver mBroadcastReceiver;
-
+    /**
+     * 在这里注册广播接收者
+     * 这里面注册广播的话,包括:
+     * 1 wifi开启状态的监听(wifi关闭,wifi打开)
+     * 2 wifi连接的广播
+     * 3 wifi连接状态改变的广播
+     * <p>
+     */
     private void registerBroadcastReceiver() {
-        mBroadcastReceiver = new BroadcastReceiver() {
-            @Override
-            public void onReceive(Context context, Intent intent) {
-                int state = intent.getIntExtra("wifi_state", 11);
-                Log.d("ZJTest", "AP state: " + state);
-            }
-        };
 
-        IntentFilter intentFilter = new IntentFilter();
-        intentFilter.addAction("android.net.wifi.WIFI_AP_STATE_CHANGED");
-        this.registerReceiver(mBroadcastReceiver, intentFilter);
-    }
-
-    private void registerNetworkConnectChangeReceiver() {
         IntentFilter filter = new IntentFilter();
-        filter.addAction(WifiManager.NETWORK_STATE_CHANGED_ACTION);
+        //设置意图过滤
+
         filter.addAction(WifiManager.WIFI_STATE_CHANGED_ACTION);
-        filter.addAction(ConnectivityManager.CONNECTIVITY_ACTION);
-        filter.addAction(WifiManager.SUPPLICANT_CONNECTION_CHANGE_ACTION);
-        filter.addAction(WifiManager.SUPPLICANT_STATE_CHANGED_ACTION);
-        networkConnectChangedReceiver = new NetworkConnectChangedReceiver();
-        registerReceiver(networkConnectChangedReceiver, filter);
+        filter.addAction(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION);
+        filter.addAction(WifiManager.NETWORK_STATE_CHANGED_ACTION);
+
+        wifiReceiver = new WifiReceiver(this);
+        registerReceiver(wifiReceiver, filter);
+
     }
-    NetworkConnectChangedReceiver networkConnectChangedReceiver = new NetworkConnectChangedReceiver();
-    class NetworkConnectChangedReceiver extends BroadcastReceiver {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            String action = intent.getAction();
-            Bundle extras = intent.getExtras();
-            Log.e(TAG,"actioin:"+action);
-            Log.e(TAG,"==>"+printBundle(extras));
 
-            if (WifiManager.WIFI_STATE_CHANGED_ACTION.equals(action)) {//这个监听wifi的打开与关闭，与wifi的连接无关
-                int wifiState = intent.getIntExtra(WifiManager.EXTRA_WIFI_STATE, -1);
-                Log.e(TAG,"WIFI状态 wifiState:" + wifiState);
-                switch (wifiState) {
-                    case WifiManager.WIFI_STATE_DISABLED:
-                        Log.e(TAG,"WIFI状态 wifiState:WIFI_STATE_DISABLED");
-                        break;
-                    case WifiManager.WIFI_STATE_DISABLING:
-                        Log.e(TAG,"WIFI状态 wifiState:WIFI_STATE_DISABLING");
-                        break;
-                    case WifiManager.WIFI_STATE_ENABLED:
-                        Log.e(TAG,"WIFI状态 wifiState:WIFI_STATE_ENABLED");
-                        break;
-                    case WifiManager.WIFI_STATE_ENABLING:
-                        Log.e(TAG,"WIFI状态 wifiState:WIFI_STATE_ENABLING");
-                        break;
-                    case WifiManager.WIFI_STATE_UNKNOWN:
-                        Log.e(TAG,"WIFI状态 wifiState:WIFI_STATE_UNKNOWN");
-                        break;
-                    //
-                }
-            }
-            // 这个监听wifi的连接状态即是否连上了一个有效无线路由，当上边广播的状态是WifiManager.WIFI_STATE_DISABLING，和WIFI_STATE_DISABLED的时候，根本不会接到这个广播。
-            // 在上边广播接到广播是WifiManager.WIFI_STATE_ENABLED状态的同时也会接到这个广播，当然刚打开wifi肯定还没有连接到有效的无线
-            if (WifiManager.NETWORK_STATE_CHANGED_ACTION.equals(action)) {
-                Parcelable parcelableExtra = intent.getParcelableExtra(WifiManager.EXTRA_NETWORK_INFO);
-                WifiInfo wifiInfo = intent.getParcelableExtra(WifiManager.EXTRA_WIFI_INFO);
-                String bssid = intent.getStringExtra(WifiManager.EXTRA_BSSID);
-                if (null != parcelableExtra && !isJoinTimeOut) {
-                    NetworkInfo networkInfo = (NetworkInfo) parcelableExtra;
-                    NetworkInfo.State state = networkInfo.getState();
-                    Log.e(TAG,"NetWork Sate Change:"+state+" connectedBssid:"+connectedBssid);
-                    if(state==NetworkInfo.State.DISCONNECTED){
-                        if(connectedBssid.equals(bssid)){
-                            boolean findCfg=false;
-                            Log.e(TAG,"连接耗时:" + ((System.currentTimeMillis() - start) / 1000.0) + "s");
-                            /*if (progressWheelDialog != null) {
-                                progressWheelDialog.setTextMsg("灯被成功加入ssid=" + mScanResult.SSID + "的WIFI网络,系统开始切换到指定网络...");
-                            }*/
-                            List<WifiConfiguration> configuredNetworks = mWifiManager.getConfiguredNetworks();
-                            for(WifiConfiguration configuration:configuredNetworks){
 
-                                Log.e(TAG,configuration.SSID+"========>"+mScanResult.SSID);
-                                String addSSID=mScanResult.SSID;
-                                if(!(mScanResult.SSID.startsWith("\"") && mScanResult.SSID.endsWith("\""))){
-                                    addSSID="\""+addSSID+"\"";
-                                }
-                                if(configuration.SSID.equals(addSSID)){
-                                    findCfg=true;
-                                    Log.e(TAG,"找到连接wifi的Configuration..尝试切换wifi");
-                                    mWifiManager.enableNetwork(configuration.networkId,true);
-                                    break;
-                                }
-                            }
-                            if(!findCfg){
-                                Log.e(TAG,"未找到连接wifi的Configuration..尝试创建连接...");
-                                int type=3;
-                                if(TextUtils.isEmpty(mPass)){
-                                    type=0;
-                                }
-                                WifiConfiguration configuration=   WifiHelper.getInstance(context).createWifiConfig(mScanResult.SSID,mPass,type);
-                                Log.e(TAG,"新的wifi配置:"+configuration);
-                                int newNetId = mWifiManager.addNetwork(configuration);
-                                Log.e(TAG,"新的netId="+newNetId);
-                                mWifiManager.enableNetwork(newNetId,true);
-                            }
+    //dialog输入密码后点击连接
+    @Override
+    public void onConnectionListener(String password) {
+        if (!TextUtils.isEmpty(connectSsid) && !TextUtils.isEmpty(password)) {
 
-                        }
-                    }else if(state== NetworkInfo.State.CONNECTED){
-                        if(mScanResult!=null) {
-                            String ssid = wifiInfo.getSSID();
-                            String addSSID=mScanResult.SSID;
-                            if(!(mScanResult.SSID.startsWith("\"") && mScanResult.SSID.endsWith("\""))){
-                                addSSID="\""+addSSID+"\"";
-                            }
-                            Log.e(TAG,ssid + "***>" + mScanResult.SSID);
-                            Log.e(TAG,"总共耗时:"+((System.currentTimeMillis()-start)/1000.0));
-                            if (ssid.equals(addSSID)) {
-                                handler.removeCallbacks(watchDog);
-//                                dismissLoadDialog(TYPE_LOAD_DIALOG);
-                                if(progressWheelDialog!=null) {
-                                    progressWheelDialog.dismiss();
-                                }
-                                Toast.makeText(getApplicationContext(), "操作成功！",Toast.LENGTH_SHORT).show();
-                                Intent intent1 = new Intent(WifiActivity.this, MainActivity.class);
-                                intent1.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
-                                startActivity(intent1);
-                            }
-                        }
+            Log.e(TAG, "马上连接：" + connectSsid + "  password=" + password);
+            int netId = mWifiManager.addNetwork(WifiHelper.getInstance(getApplicationContext()).createWifiConfig(connectSsid, password, WIFICIPHER_WPA));
+            boolean enable = mWifiManager.enableNetwork(netId, true);
+            Log.e("ZJTest", "enable: " + enable);
+            /*boolean reconnect = mWifiManager.reconnect();
+            Log.e("ZJTest", "reconnect: " + reconnect);*/
+        } else {
+            Log.e("connectListener", !TextUtils.isEmpty(connectSsid) + "  " + (!TextUtils.isEmpty(password)));
+        }
+    }
+
+    @Override
+    public void onItemClick(View view, int postion) {
+        Toast.makeText(this, "点击item:" + postion, Toast.LENGTH_SHORT).show();
+        connectSsid = list.get(postion).SSID;
+        Log.e(TAG, "点击item connectSsid=" + connectSsid);
+        showDialog();
+    }
+
+    //显示输入密码的框框
+    public void showDialog() {
+        Dialog dialog = new InputAndConnectDialog.Builder(this).setListener(this).setName(connectSsid).create();
+        dialog.show();
+        android.view.WindowManager.LayoutParams p = dialog.getWindow().getAttributes();  //获取对话框当前的参数值
+        p.height = 450;
+        p.width = 600;    //宽度设置为屏幕的0.5
+        dialog.getWindow().setAttributes(p);     //设置生效
+    }
+
+    //长按后显示一个dialog
+    @Override
+    public void onItemLongClick(View view, int postion) {
+        connectSsid = list.get(postion).SSID;
+        Log.e(TAG, "长按item connectSsid=" + connectSsid);
+        SelectItemDialog.Builder builder = new SelectItemDialog.Builder(this);
+        builder.setOnSelectDialogListener(this);
+        builder.setShowText(connectSsid);
+        Dialog dialog = builder.create();
+        dialog.show();
+        android.view.WindowManager.LayoutParams p = dialog.getWindow().getAttributes();  //获取对话框当前的参数值
+        p.height = 240;
+        p.width = 450;    //宽度设置为屏幕的0.5
+        dialog.getWindow().setAttributes(p);     //设置生效
+    }
+
+    //点击了长按出现的dialog里的选择项
+    @Override
+    public void onClickSelectedListener(View view, int type) {
+        switch (type) {
+            case 1: {//连接
+                Log.e(TAG,"弹框选择项的长条条点击了--》1");
+                WifiInfo info = WifiHelper.getInstance(this).getConnectWifiInifo();
+                //断开指定ID的网络
+                mWifiManager.disableNetwork(info.getNetworkId());
+                mWifiManager.disconnect();
+
+                Log.e(TAG,  "connectSsid="+connectSsid );
+                List<WifiConfiguration> configList = mWifiManager.getConfiguredNetworks();
+                for (WifiConfiguration cfg : configList) {
+                    if (cfg.SSID.equals("\""+ connectSsid+"\"")) {
+                        Log.e(TAG,"点击了连接这个网络："+cfg.toString());
+                        mWifiManager.enableNetwork(cfg.networkId, true);
+                        break;
                     }
                 }
-            }
-        }
-
-        private  String printBundle(Bundle bundle) {
-            StringBuilder sb = new StringBuilder();
-            for (String key : bundle.keySet()) {
-                if (key.equals(WifiManager.EXTRA_WIFI_STATE)) {
-                    sb.append("\nkey:" + key + ", value:" + bundle.getInt(key));
-                } else {
-                    sb.append("\nkey:" + key + ", value:" + bundle.get(key));
+            }break;
+            case 2: {//取消保存
+                Log.e(TAG,"弹框选择项的长条条点击了--》2");
+                List<WifiConfiguration> configList = mWifiManager.getConfiguredNetworks();
+                for (WifiConfiguration cfg : configList) {
+                    if (cfg.SSID.equals("\""+ connectSsid+"\"")) {
+                        mWifiManager.removeNetwork(cfg.networkId);
+                        mWifiManager.saveConfiguration();
+                        reflushList();
+                        break;
+                    }
                 }
-            }
-//        Log.e(TAG,"bundle:"+bundle);
-            return sb.toString();
+            }break;
+            case 3://修改密码
+                Log.e(TAG,"弹框选择项的长条条点击了--》3");
+                break;
         }
-
-    }
-    private void unregisterBroadcastReceiver() {
-        this.unregisterReceiver(mBroadcastReceiver);
     }
 }

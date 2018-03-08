@@ -20,10 +20,20 @@ public class ScanResultAdapter extends BaseAdapter {
     List<ItemBean> mList;
     Context mContext;
     String name;
+
     public ScanResultAdapter(Context context, List<ItemBean> list,String selectedName) {
         mList = list;
         mContext = context;
         name = selectedName;
+    }
+    OnItemClickListener listener;
+
+    public OnItemClickListener getListener() {
+        return listener;
+    }
+
+    public void setListener(OnItemClickListener listener) {
+        this.listener = listener;
     }
 
     @Override
@@ -32,7 +42,7 @@ public class ScanResultAdapter extends BaseAdapter {
     }
 
     @Override
-    public View getView(int position, View convertView, ViewGroup parent) {
+    public View getView(final int position, View convertView, ViewGroup parent) {
         LayoutInflater inflater = LayoutInflater.from(mContext);
         View view;
         ItemBean scanResult = mList.get(position);
@@ -52,6 +62,7 @@ public class ScanResultAdapter extends BaseAdapter {
         if(name!=null && name.equals(scanResult.getScanResult().SSID)){
             stringBuffer.append("(已连接)");
         }else{
+
         }
         tv1.setText(stringBuffer);//设置参数
 
@@ -66,19 +77,23 @@ public class ScanResultAdapter extends BaseAdapter {
         }*/
         ImageView imageView = (ImageView) view.findViewById(R.id.imageLevel);
         //判断信号强度，显示对应的指示图标
-        /*if (Math.abs(scanResult.level) > 100) {
-            imageView.setImageDrawable(mContext.getResources().getDrawable(R.drawable.stat_sys_wifi_signal_0));
-        } else if (Math.abs(scanResult.level) > 80) {
-            imageView.setImageDrawable(mContext.getResources().getDrawable(R.drawable.stat_sys_wifi_signal_1));
+        if (Math.abs(scanResult.level) > 90) {
+            imageView.setImageDrawable(mContext.getResources().getDrawable(R.drawable.wifi_level4));
         } else if (Math.abs(scanResult.level) > 70) {
-            imageView.setImageDrawable(mContext.getResources().getDrawable(R.drawable.stat_sys_wifi_signal_2));
-        } else if (Math.abs(scanResult.level) > 60) {
-            imageView.setImageDrawable(mContext.getResources().getDrawable(R.drawable.stat_sys_wifi_signal_3));
+            imageView.setImageDrawable(mContext.getResources().getDrawable(R.drawable.wifi_level3));
         } else if (Math.abs(scanResult.level) > 50) {
-            imageView.setImageDrawable(mContext.getResources().getDrawable(R.drawable.stat_sys_wifi_signal_4));
-        } else {
-            imageView.setImageDrawable(mContext.getResources().getDrawable(R.drawable.stat_sys_wifi_signal_5));
-        }*/
+            imageView.setImageDrawable(mContext.getResources().getDrawable(R.drawable.wifi_level2));
+        }else{
+            imageView.setImageDrawable(mContext.getResources().getDrawable(R.drawable.wifi_level1));
+        }
+        view.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if(listener!=null){
+                    listener.onItemClick(v,position);
+                }
+            }
+        });
         return view;
     }
 
