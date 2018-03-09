@@ -97,6 +97,23 @@ public class WifiHelper {
         }
         return null;
     }
+    public void reconnect(Context context,String connectSsid){
+        WifiInfo info = WifiHelper.getInstance(context).getConnectWifiInifo();
+        //断开指定ID的网络
+        mWifiManager.disableNetwork(info.getNetworkId());
+        mWifiManager.disconnect();
+
+        List<WifiConfiguration> configList = mWifiManager.getConfiguredNetworks();
+        String willConnect = null;
+        for (WifiConfiguration cfg : configList) {
+            if (cfg.SSID.equals("\""+ connectSsid+"\"")) {
+                Log.e("reconnect","点击了连接这个网络："+cfg.toString());
+                willConnect = cfg.SSID;
+                mWifiManager.enableNetwork(cfg.networkId, true);
+                break;
+            }
+        }
+    }
     private List<String> getNetworkId(){
         List<String>ssidList = new ArrayList<>();
         List<WifiConfiguration> wifiConfigurationList = mWifiManager.getConfiguredNetworks();
@@ -110,4 +127,5 @@ public class WifiHelper {
         }
         return ssidList;
     }
+
 }

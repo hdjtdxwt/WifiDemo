@@ -2,26 +2,16 @@ package com.epsit.wifidemo.dialog;
 
 import android.app.Dialog;
 import android.content.Context;
-import android.content.DialogInterface;
-import android.os.Handler;
-import android.os.Message;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup.LayoutParams;
-import android.widget.Button;
 import android.widget.EditText;
-import android.widget.ImageView;
-import android.widget.LinearLayout;
 import android.widget.TextView;
 
 
 import com.epsit.wifidemo.R;
-import com.epsit.wifidemo.WifiActivity;
-
-import java.util.Timer;
-import java.util.TimerTask;
 
 /**
  * wifi输入密码框并连接的dialog
@@ -70,7 +60,7 @@ public class InputAndConnectDialog extends Dialog {
             dialog = new InputAndConnectDialog(context, R.style.dialog);
             dialog.setCanceledOnTouchOutside(false);
             dialog.setCancelable(false);
-            View layout = inflater.inflate(R.layout.dialog, null);
+            View layout = inflater.inflate(R.layout.input_connect_dialog, null);
 
             final EditText editText = (EditText) layout.findViewById(R.id.password);
             TextView nameText = (TextView) layout.findViewById(R.id.name);

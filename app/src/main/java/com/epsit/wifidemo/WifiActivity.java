@@ -2,47 +2,34 @@ package com.epsit.wifidemo;
 
 import android.Manifest;
 import android.app.Dialog;
-import android.content.BroadcastReceiver;
-import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
-import android.net.ConnectivityManager;
-import android.net.NetworkInfo;
 import android.net.wifi.ScanResult;
 import android.net.wifi.WifiConfiguration;
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
+import android.os.Bundle;
 import android.os.Handler;
-import android.os.Parcelable;
+import android.provider.Settings;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AppCompatActivity;
-import android.os.Bundle;
-import android.support.v7.widget.LinearLayoutManager;
-import android.support.v7.widget.RecyclerView;
 import android.text.TextUtils;
 import android.util.Log;
-import android.view.Display;
-import android.view.LayoutInflater;
 import android.view.View;
-import android.view.ViewGroup;
-import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.ListView;
+import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.List;
-import java.util.TreeMap;
-
-import android.support.v7.app.AppCompatActivity;
-
 import com.epsit.wifidemo.dialog.InputAndConnectDialog;
 import com.epsit.wifidemo.dialog.SelectItemDialog;
+import com.epsit.wifidemo.util.WifiInfoManage;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Created by Administrator on 2018/2/27/027.
@@ -54,7 +41,7 @@ public class WifiActivity extends AppCompatActivity implements WifiReceiverActio
     private boolean mHasPermission;
     String TAG = "WifiActivity";
     TextView mOpenWifiButton;
-    Button mGetWifiInfoButton;
+    Switch mGetWifiInfoButton;
     WifiReceiver wifiReceiver;
     ListView listView;
     ResultListAdapter adapter;
@@ -98,19 +85,11 @@ public class WifiActivity extends AppCompatActivity implements WifiReceiverActio
     private List<ScanResult> mScanResultList;
     private void findChildViews() {
         mOpenWifiButton = (TextView) findViewById(R.id.open_wifi);
-        mGetWifiInfoButton = (Button) findViewById(R.id.get_wifi_info);
+        mGetWifiInfoButton = (Switch) findViewById(R.id.get_wifi_info);
         listView = (ListView) findViewById(R.id.wifi_info_detail);
+        mGetWifiInfoButton.setChecked(WifiManager.WIFI_STATE_ENABLED==mWifiManager.getWifiState());
     }
     private void configChildViews() {
-        /*mOpenWifiButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                if (!mWifiManager.isWifiEnabled()) {
-                    mWifiManager.setWifiEnabled(true);
-                    mMainHandler.post(mMainRunnable);
-                }
-            }
-        });*/
 
         mGetWifiInfoButton.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -217,7 +196,6 @@ public class WifiActivity extends AppCompatActivity implements WifiReceiverActio
     public void onWifiOpened() {
         Log.e(TAG, "onWifiOpened-->wifi打开了");
         reflushList();
-        mGetWifiInfoButton.setBackgroundResource(R.drawable.wifi_blue_icon);
     }
 
     @Override
@@ -231,7 +209,6 @@ public class WifiActivity extends AppCompatActivity implements WifiReceiverActio
         list.clear();
         //reflushList();
         adapter.notifyDataSetChanged();
-        mGetWifiInfoButton.setBackgroundResource(R.drawable.wifi_gray_icon);
     }
 
     @Override
@@ -402,13 +379,39 @@ public class WifiActivity extends AppCompatActivity implements WifiReceiverActio
 
                 Log.e(TAG,  "connectSsid="+connectSsid );
                 List<WifiConfiguration> configList = mWifiManager.getConfiguredNetworks();
+                String willConnect = null;
                 for (WifiConfiguration cfg : configList) {
                     if (cfg.SSID.equals("\""+ connectSsid+"\"")) {
                         Log.e(TAG,"点击了连接这个网络："+cfg.toString());
+                        willConnect = cfg.SSID;
                         mWifiManager.enableNetwork(cfg.networkId, true);
                         break;
                     }
                 }
+                Log.e(TAG,"-------------->1--start");
+                try {
+                    List<com.epsit.wifidemo.util.WifiInfo>wifiInfos = new WifiInfoManage().Read();
+                    com.epsit.wifidemo.util.WifiInfo targetWifi=null;
+                    if(wifiInfos!=null && willConnect!=null){
+                        for(com.epsit.wifidemo.util.WifiInfo wifiInfo :wifiInfos){
+                            if(willConnect.equals("\""+wifiInfo.Ssid+"\"")){
+                                targetWifi = wifiInfo;
+                            }
+                            Log.e(TAG,"已经保存的wifi的信息：ssid="+wifiInfo.Ssid+"  password="+wifiInfo.Password+"  加密方式mgmt:"+wifiInfo.mgmt);
+                        }
+                    }
+                    Log.e(TAG,"------targetWifi判断是为空");
+                    if(targetWifi!=null){
+                        Log.e(TAG,"要连接的目标wifi:ssid="+targetWifi.Ssid+"  password="+targetWifi.Password+"  加密方式mgmt:"+targetWifi.mgmt);
+                        Log.e(TAG,targetWifi.Ssid+"_"+targetWifi.Password+"_"+targetWifi.mgmt);
+                    }else{
+                        Log.e(TAG,"没有获取到当前的要连接的wifi的信息（密码）");
+                    }
+
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+                Log.e(TAG,"-------------->1--end");
             }break;
             case 2: {//取消保存
                 Log.e(TAG,"弹框选择项的长条条点击了--》2");
@@ -425,6 +428,180 @@ public class WifiActivity extends AppCompatActivity implements WifiReceiverActio
             case 3://修改密码
                 Log.e(TAG,"弹框选择项的长条条点击了--》3");
                 break;
+        }
+    }
+    public void test(){
+        {
+
+            Intent intent1 =  new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
+            startActivity(intent1);
+
+
+            Intent intent2 =  new Intent(Settings.ACTION_ADD_ACCOUNT);
+            startActivity(intent2);
+
+
+            Intent intent3 =  new Intent(Settings.ACTION_AIRPLANE_MODE_SETTINGS);
+            startActivity(intent3);
+
+
+
+            Intent intent4 =  new Intent(Settings.ACTION_WIFI_SETTINGS);
+            startActivity(intent4);
+
+
+            Intent intent5 =  new Intent(Settings.ACTION_APN_SETTINGS);
+            startActivity(intent5);
+
+
+
+
+        Intent intent6 =  new Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS);
+            startActivity(intent6);
+
+
+            Intent intent7 =  new Intent(Settings.ACTION_APPLICATION_SETTINGS);
+            startActivity(intent7);
+
+
+            Intent intent8 =  new Intent(Settings.ACTION_MANAGE_ALL_APPLICATIONS_SETTINGS);
+            startActivity(intent8);
+
+            /*ACTION_MANAGE_APPLICATIONS_SETTINGS  ：//  跳转 应用程序列表界面【已安装的】
+
+            Intent intent =  new Intent(Settings.ACTION_MANAGE_APPLICATIONS_SETTINGS);
+            startActivity(intent);
+
+
+
+            8.    ACTION_BLUETOOTH_SETTINGS  ：      // 跳转系统的蓝牙设置界面
+
+            Intent intent =  new Intent(Settings.ACTION_BLUETOOTH_SETTINGS);
+            startActivity(intent);
+
+            9.    ACTION_DATA_ROAMING_SETTINGS ：   //  跳转到移动网络设置界面
+
+            Intent intent =  new Intent(Settings.ACTION_DATA_ROAMING_SETTINGS);
+            startActivity(intent);
+
+            10.    ACTION_DATE_SETTINGS ：           //  跳转日期时间设置界面
+
+            Intent intent =  new Intent(Settings.ACTION_DATA_ROAMING_SETTINGS);
+            startActivity(intent);
+
+            11.    ACTION_DEVICE_INFO_SETTINGS  ：    // 跳转手机状态界面
+
+            Intent intent =  new Intent(Settings.ACTION_DEVICE_INFO_SETTINGS);
+            startActivity(intent);
+
+            12.    ACTION_DISPLAY_SETTINGS  ：        // 跳转手机显示界面
+
+            Intent intent =  new Intent(Settings.ACTION_DISPLAY_SETTINGS);
+            startActivity(intent);
+
+            13.    ACTION_DREAM_SETTINGS     【API 18及以上 没测试】
+
+            Intent intent =  new Intent(Settings.ACTION_DREAM_SETTINGS);
+            startActivity(intent);
+
+
+            14.    ACTION_INPUT_METHOD_SETTINGS ：    // 跳转语言和输入设备
+
+            Intent intent =  new Intent(Settings.ACTION_INPUT_METHOD_SETTINGS);
+            startActivity(intent);
+
+            15.    ACTION_INPUT_METHOD_SUBTYPE_SETTINGS  【API 11及以上】  //  跳转 语言选择界面 【多国语言选择】
+
+            Intent intent =  new Intent(Settings.ACTION_INPUT_METHOD_SUBTYPE_SETTINGS);
+            startActivity(intent);
+
+            16.    ACTION_INTERNAL_STORAGE_SETTINGS         // 跳转存储设置界面【内部存储】
+
+            Intent intent =  new Intent(Settings.ACTION_INTERNAL_STORAGE_SETTINGS);
+            startActivity(intent);
+
+            或者：
+
+            ACTION_MEMORY_CARD_SETTINGS    ：   // 跳转 存储设置 【记忆卡存储】
+
+            Intent intent =  new Intent(Settings.ACTION_MEMORY_CARD_SETTINGS);
+            startActivity(intent);
+
+
+            17.    ACTION_LOCALE_SETTINGS  ：         // 跳转语言选择界面【仅有English 和 中文两种选择】
+
+            Intent intent =  new Intent(Settings.ACTION_LOCALE_SETTINGS);
+            startActivity(intent);
+
+
+            18.     ACTION_LOCATION_SOURCE_SETTINGS :    //  跳转位置服务界面【管理已安装的应用程序。】
+
+        Intent intent =  new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
+            startActivity(intent);
+
+            19.    ACTION_NETWORK_OPERATOR_SETTINGS ： // 跳转到 显示设置选择网络运营商。
+
+            Intent intent =  new Intent(Settings.ACTION_NETWORK_OPERATOR_SETTINGS);
+            startActivity(intent);
+
+            20.    ACTION_NFCSHARING_SETTINGS  ：       // 显示NFC共享设置。 【API 14及以上】
+
+            Intent intent =  new Intent(Settings.ACTION_NFCSHARING_SETTINGS);
+            startActivity(intent);
+
+            21.    ACTION_NFC_SETTINGS  ：           // 显示NFC设置。这显示了用户界面,允许NFC打开或关闭。  【API 16及以上】
+
+            Intent intent =  new Intent(Settings.ACTION_NFC_SETTINGS);
+            startActivity(intent);
+
+            22.    ACTION_PRIVACY_SETTINGS ：       //  跳转到备份和重置界面
+
+            Intent intent =  new Intent(Settings.ACTION_PRIVACY_SETTINGS);
+            startActivity(intent);
+
+            23.    ACTION_QUICK_LAUNCH_SETTINGS  ： // 跳转快速启动设置界面
+
+            Intent intent =  new Intent(Settings.ACTION_QUICK_LAUNCH_SETTINGS);
+            startActivity(intent);
+
+            24.    ACTION_SEARCH_SETTINGS    ：    // 跳转到 搜索设置界面
+
+            Intent intent =  new Intent(Settings.ACTION_SEARCH_SETTINGS);
+            startActivity(intent);
+
+            25.    ACTION_SECURITY_SETTINGS  ：     // 跳转到安全设置界面
+
+            Intent intent =  new Intent(Settings.ACTION_SECURITY_SETTINGS);
+            startActivity(intent);
+
+            26.    ACTION_SETTINGS   ：                // 跳转到设置界面
+
+            Intent intent =  new Intent(Settings.ACTION_SETTINGS);
+            startActivity(intent);
+
+            27.   ACTION_SOUND_SETTINGS                // 跳转到声音设置界面
+
+            Intent intent =  new Intent(Settings.ACTION_SOUND_SETTINGS);
+            startActivity(intent);
+
+            28.   ACTION_SYNC_SETTINGS ：             // 跳转账户同步界面
+
+            Intent intent =  new Intent(Settings.ACTION_SYNC_SETTINGS);
+            startActivity(intent);
+
+            29.     ACTION_USER_DICTIONARY_SETTINGS ：  //  跳转用户字典界面
+
+            Intent intent =  new Intent(Settings.ACTION_USER_DICTIONARY_SETTINGS);
+            startActivity(intent);
+
+            30.     ACTION_WIFI_IP_SETTINGS  ：         // 跳转到IP设定界面  */
+
+            Intent intent =  new Intent(Settings.ACTION_WIFI_IP_SETTINGS);
+            startActivity(intent);
+
+
+            Intent intent31 =  new Intent(Settings.ACTION_WIFI_SETTINGS );//wifi设置
+            startActivity(intent31);
         }
     }
 }
