@@ -4,7 +4,8 @@ package com.epsit.wifidemo.util;
 import android.os.Parcel;
 import android.os.Parcelable;
 
-public class WifiInfo implements Parcelable{
+
+public class WifiInfo implements Parcelable {
     public String Ssid="";
     public String Password="";
     public String mgmt="NONE";
@@ -37,5 +38,37 @@ public class WifiInfo implements Parcelable{
         dest.writeString(Ssid);
         dest.writeString(Password);
         dest.writeString(mgmt);
+    }
+
+    public String getSsid() {
+        return Ssid;
+    }
+
+    public void setSsid(String ssid) {
+        Ssid = ssid;
+    }
+
+    public String getPassword() {
+        return Password;
+    }
+
+    public void setPassword(String password) {
+        Password = password;
+    }
+
+    public String getMgmt() {
+        return mgmt;
+    }
+
+    public void setMgmt(String mgmt) {
+        this.mgmt = mgmt;
+    }
+
+    @Override
+    public String toString() {
+        return "{" +
+                "'Ssid':'" + Ssid + "'" +
+                ", 'Password':'" + Password + "'" +
+                ", 'mgmt':'" + mgmt +"'}";
     }
 }

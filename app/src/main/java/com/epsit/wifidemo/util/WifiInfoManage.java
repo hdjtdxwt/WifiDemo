@@ -69,7 +69,7 @@ public class WifiInfoManage {
                 Pattern psk = Pattern.compile("psk=\"([^\"]+)\"");
                 Matcher pskMatcher = psk.matcher(networkBlock);
 
-                Pattern mgmt = Pattern.compile("key_mgmt=([^\"]+)");
+                Pattern mgmt = Pattern.compile("\\s+key_mgmt=([^\"]+)\\s");
                 Matcher mgmtMatcher = mgmt.matcher(networkBlock);
 
                 if (pskMatcher.find() ) {

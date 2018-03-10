@@ -16,6 +16,8 @@ import android.widget.AdapterView;
 import android.widget.Button;
 import android.widget.ListView;
 
+import com.epsit.wifidemo.util.WifiInfoManage;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -63,9 +65,20 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             }
                 break;
             case R.id.open:
-                wifiManager.setWifiEnabled(true);
+                //wifiManager.setWifiEnabled(true);
+                getInfo();
                 break;
 
+        }
+    }
+    public void getInfo(){
+        try {
+            List<com.epsit.wifidemo.util.WifiInfo>list = new WifiInfoManage().Read();
+            for(com.epsit.wifidemo.util.WifiInfo info:list){
+                Log.e(TAG,info.toString());
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
         }
     }
     public String getConnectedName(){
